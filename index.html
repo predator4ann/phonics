@@ -30,7 +30,8 @@ nav button.on{border-color:var(--accent);background:#fff0e3}
 .step .hint{color:var(--sub);font-size:16px}
 .step .chk{width:56px;height:56px;border-radius:50%;border:3px solid var(--line);font-size:30px;background:#fff;flex:none;color:var(--ok)}
 .step.done .chk{border-color:var(--ok);background:var(--ok);color:#fff}
-a.go{display:inline-block;margin-top:8px;padding:10px 18px;border-radius:14px;background:var(--sky);color:#fff;text-decoration:none;font-size:18px;font-weight:700;margin-right:8px}
+a.go,button.go{display:inline-block;border:none;margin-top:8px;padding:10px 18px;border-radius:14px;background:var(--sky);color:#fff;text-decoration:none;font-size:18px;font-weight:700;margin-right:8px}
+.vid{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:14px;margin-top:10px;background:#000}
 .cards{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
 .lc{background:#fff8ee;border:2px solid var(--line);border-radius:18px;padding:10px 14px;text-align:center;min-width:120px}
 .lc .big{font-family:ui-rounded,"SF Pro Rounded",-apple-system,sans-serif;font-size:56px;font-weight:700;line-height:1}
@@ -90,7 +91,8 @@ const REVIEWS = {2:{n:1,song:20,game:23},4:{n:2,song:40,game:43},6:{n:3,song:60,
 const IVY_T = {A:0,B:110,C:164,D:202,E:255,F:315,G:352,H:406,I:433,J:488,K:534,L:590,M:645,N:714,O:762,P:806,Q:847,R:902,S:961,T:1001,U:1056,V:1113,W:1160,X:1201,Y:1245,Z:1280};
 const IVY_RECAP = 1322;
 const IVY_BASE = 'https://www.bilibili.com/video/BV1Lq4y1P7rN/?p=1';
-const ivyUrl = L => `${IVY_BASE}&t=${IVY_T[L]}`;
+// 嵌入播放器支持从指定秒数开始（iPad 上外链的 t= 参数会被 B 站 app/手机版忽略）
+const ivyEmbed = t => `https://player.bilibili.com/player.html?bvid=BV1Lq4y1P7rN&p=1&t=${t}&autoplay=1&danmaku=0`;
 const ivyEnd = L => L==='Z' ? IVY_RECAP : IVY_T[String.fromCharCode(L.charCodeAt(0)+1)];
 const fmtT = s => `${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;
 // Hello Carrie 字母儿歌合集，P1-P26 = A-Z
@@ -131,6 +133,7 @@ function card(L){
 }
 const cards = Ls => `<div class="cards">${[...Ls].map(card).join('')}</div>`;
 const link = (url,txt) => `<a class="go" href="${url}" target="_blank" rel="noopener">${txt}</a>`;
+const ivyPlay = t => `<button class="go" data-play="${t}">▶ 在这里播放</button>${link(`${IVY_BASE}&t=${t}`,'去 B 站看')}`;
 
 function steps(s){
   const prev = SESSIONS[st.idx-1];
@@ -139,7 +142,7 @@ function steps(s){
     if (prev) out.push({ico:'☀️',name:'热身：读一读上次学的',body:cards(prev.L)+'<div class="note">点单词可以听发音</div>'});
     out.push({ico:'📺',name:'看 Ivy 老师讲这个音',
       hint: `从 ${fmtT(IVY_T[s.L])} 看到 ${fmtT(ivyEnd(s.L))}`,
-      body:link(ivyUrl(s.L),'▶ 打开视频')});
+      body:ivyPlay(IVY_T[s.L])});
     out.push({ico:'📗',name:`做书：第 ${s.p[0]}–${s.p[1]} 页`,hint:'看图、跟读、描字母，写不了的可以只指一指',body:cards(s.L)});
     out.push({ico:'🎵',name:`唱 ${s.L} 的儿歌`,hint:'Hello Carrie，2分钟',body:link(songUrl(s.L),'▶ 打开儿歌')});
     return out;
@@ -151,7 +154,7 @@ function steps(s){
     {ico:'🎵',name:'挑一首喜欢的儿歌再唱一遍',body:[...s.L].map(L=>link(songUrl(L),`▶ ${L}`)).join('')}];
   return [
     {ico:'🔤',name:'把这两个单元的字母读一遍',body:cards(s.L)},
-    {ico:'📺',name:'Ivy 老师的字母总复习',hint:`从 ${fmtT(IVY_RECAP)} 看到结尾`,body:link(`${IVY_BASE}&t=${IVY_RECAP}`,'▶ 打开视频')},
+    {ico:'📺',name:'Ivy 老师的字母总复习',hint:`从 ${fmtT(IVY_RECAP)} 看到结尾`,body:ivyPlay(IVY_RECAP)},
     {ico:'🎤',name:`书上的歌：第 ${s.song}–${s.game-1} 页`},
     {ico:'🎲',name:`书上的游戏：第 ${s.game} 页`}];
 }
@@ -198,8 +201,10 @@ function parentPanel(){
 }
 
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-say],[data-tick],[data-letter],#finish,#tabToday,#tabMap'); if(!t)return;
+  const t=e.target.closest('[data-say],[data-play],[data-tick],[data-letter],#finish,#tabToday,#tabMap'); if(!t)return;
   if (t.dataset.say) return say(t.dataset.say);
+  if (t.dataset.play){ document.querySelectorAll('.vid').forEach(f=>f.remove());
+    t.closest('.body').insertAdjacentHTML('beforeend',`<iframe class="vid" src="${ivyEmbed(t.dataset.play)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`); return; }
   if (t.dataset.tick!=null){ const i=+t.dataset.tick; st.ticks[i]=!st.ticks[i]; save(); return render(); }
   if (t.dataset.letter) return sheet(`<div style="display:flex;justify-content:center">${card(t.dataset.letter)}</div>`);
   if (t.id==='finish'){ st.idx++; st.stars++; st.ticks=[]; save(); render(); window.scrollTo(0,0); return; }

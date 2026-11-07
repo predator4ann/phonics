@@ -1,5 +1,5 @@
 // 先用缓存秒开，同时后台取最新版，下次打开生效
-const C = 'phonics-v1';
+const C = 'phonics-v2';
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(['./', 'index.html']))); });
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
