@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="拼读">
+<meta name="theme-color" content="#fff7e6">
+<title>自然拼读</title>
+<style>
+:root{--bg:#fff7e6;--card:#fff;--ink:#3a2e1f;--sub:#8a7a66;--line:#f0e2c8;--accent:#ff8a3d;--ok:#3fb36b;--sky:#4aa8ff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.4 -apple-system,"PingFang SC",sans-serif}
+body{padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px)}
+.wrap{max-width:820px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+header h1{margin:0;font-size:24px}
+.stars{font-size:22px;font-weight:700}
+nav{display:flex;gap:10px;margin-bottom:14px}
+nav button{flex:1;font-size:20px;padding:12px;border-radius:16px;border:2px solid var(--line);background:var(--card);color:var(--ink)}
+nav button.on{border-color:var(--accent);background:#fff0e3}
+.title{font-size:26px;font-weight:700;margin:6px 0 2px}
+.subt{color:var(--sub);margin-bottom:14px}
+.step{display:flex;align-items:center;gap:14px;background:var(--card);border:2px solid var(--line);border-radius:22px;padding:16px;margin-bottom:12px}
+.step.done{border-color:var(--ok);background:#effaf2}
+.step .ico{font-size:44px;width:60px;text-align:center;flex:none}
+.step .body{flex:1;min-width:0}
+.step .name{font-size:22px;font-weight:700}
+.step .hint{color:var(--sub);font-size:16px}
+.step .chk{width:56px;height:56px;border-radius:50%;border:3px solid var(--line);font-size:30px;background:#fff;flex:none;color:var(--ok)}
+.step.done .chk{border-color:var(--ok);background:var(--ok);color:#fff}
+a.go{display:inline-block;margin-top:8px;padding:10px 18px;border-radius:14px;background:var(--sky);color:#fff;text-decoration:none;font-size:18px;font-weight:700;margin-right:8px}
+.cards{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.lc{background:#fff8ee;border:2px solid var(--line);border-radius:18px;padding:10px 14px;text-align:center;min-width:120px}
+.lc .big{font-family:ui-rounded,"SF Pro Rounded",-apple-system,sans-serif;font-size:56px;font-weight:700;line-height:1}
+.lc .em{font-size:34px}
+.words{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:6px}
+.w{font-family:ui-rounded,"SF Pro Rounded",-apple-system,sans-serif;font-size:20px;padding:4px 10px;border-radius:12px;background:#fff;border:1px solid var(--line)}
+.w:active{background:#ffe2c9}
+.finish{display:block;width:100%;font-size:30px;font-weight:700;padding:20px;border:none;border-radius:24px;background:var(--accent);color:#fff;margin-top:8px}
+.finish:disabled{background:#e8dcc8;color:#a99a85}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px}
+.tile{aspect-ratio:1;border-radius:20px;background:#eee6d8;color:#b9ab96;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:ui-rounded,"SF Pro Rounded",-apple-system,sans-serif;font-size:38px;font-weight:700;border:none}
+.tile .em{font-size:28px;filter:grayscale(1);opacity:.35}
+.tile.lit{background:var(--card);color:var(--ink);border:3px solid var(--accent)}
+.tile.lit .em{filter:none;opacity:1}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px}
+.sheet>div{background:var(--card);border-radius:24px;padding:20px;max-width:560px;width:100%;max-height:85vh;overflow:auto}
+.plist button{display:block;width:100%;text-align:left;padding:10px 12px;margin:4px 0;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:17px;color:var(--ink)}
+.plist button.cur{border-color:var(--accent);background:#fff0e3;font-weight:700}
+.gear{font-size:26px;background:none;border:none;padding:6px;color:var(--sub)}
+.party{text-align:center;font-size:90px;margin:20px 0}
+.note{color:var(--sub);font-size:15px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>自然拼读 · 第1册</h1>
+    <div><span class="stars" id="stars"></span><button class="gear" id="gear" title="长按进入家长设置">⚙︎</button></div>
+  </header>
+  <nav><button id="tabToday" class="on">📅 今天</button><button id="tabMap">🗺️ 字母地图</button></nav>
+  <main id="main"></main>
+</div>
+<script>
+// ---- 教材数据：Oxford Phonics World 1（页码为书上印的页码） ----
+const WORDS = {
+ A:"apple ax ant alligator",B:"bear bird bed banana",C:"cat cup car computer",
+ D:"dog desk doll duck",E:"egg elbow envelope elephant",F:"fish fan farm fork",
+ G:"gorilla goat gift girl",H:"horse hat house hot dog",I:"insect ink igloo iguana",
+ J:"jet jam juice jacket",K:"kangaroo key king kite",L:"lion lamp leaf lemon",
+ M:"monkey milk money mouse",N:"nut net nest nose",O:"octopus ox olive ostrich",
+ P:"peach pen panda pineapple",Q:"queen quiz quilt question",R:"rabbit rose rice robot",
+ S:"seal sun soap socks",T:"turtle tent tiger teacher",U:"umbrella up uncle umpire",
+ V:"van vet vest violin",W:"wolf web water watch",X:"fox box six wax",
+ Y:"yo-yo yak yogurt yacht",Z:"zipper zero zoo zebra"};
+const WORDS_LIST = L => L==='H' ? ["horse","hat","house","hot dog"] : WORDS[L].split(' ');
+const EMOJI = {A:"🍎",B:"🐻",C:"🐱",D:"🐶",E:"🥚",F:"🐟",G:"🦍",H:"🐴",I:"🐛",J:"✈️",K:"🦘",L:"🦁",M:"🐒",
+ N:"🥜",O:"🐙",P:"🍑",Q:"👸",R:"🐰",S:"🦭",T:"🐢",U:"☂️",V:"🚐",W:"🐺",X:"🦊",Y:"🪀",Z:"🦓"};
+const UNITS = [
+ {n:1,L:"ABC",start:4,rev:10,story:11},{n:2,L:"DEF",start:12,rev:18,story:19},
+ {n:3,L:"GHI",start:24,rev:30,story:31},{n:4,L:"JKL",start:32,rev:38,story:39},
+ {n:5,L:"MNO",start:44,rev:50,story:51},{n:6,L:"PQR",start:52,rev:58,story:59},
+ {n:7,L:"STUV",start:64,rev:72,story:73},{n:8,L:"WXYZ",start:74,rev:82,story:83}];
+const REVIEWS = {2:{n:1,song:20,game:23},4:{n:2,song:40,game:43},6:{n:3,song:60,game:63},8:{n:4,song:84,game:87}};
+
+// ---- 视频 ----
+// Ivy 老师 P1「26个字母的声音」，每个字母开始的秒数（A 从头看，含开场讲解）；22:02 起是 26 个字母总复习
+const IVY_T = {A:0,B:110,C:164,D:202,E:255,F:315,G:352,H:406,I:433,J:488,K:534,L:590,M:645,N:714,O:762,P:806,Q:847,R:902,S:961,T:1001,U:1056,V:1113,W:1160,X:1201,Y:1245,Z:1280};
+const IVY_RECAP = 1322;
+const IVY_BASE = 'https://www.bilibili.com/video/BV1Lq4y1P7rN/?p=1';
+const ivyUrl = L => `${IVY_BASE}&t=${IVY_T[L]}`;
+const ivyEnd = L => L==='Z' ? IVY_RECAP : IVY_T[String.fromCharCode(L.charCodeAt(0)+1)];
+const fmtT = s => `${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;
+// Hello Carrie 字母儿歌合集，P1-P26 = A-Z
+const songUrl = L => `https://www.bilibili.com/video/BV1Eh411p7Zb/?p=${L.charCodeAt(0)-64}`;
+
+// ---- 课程表：按书的顺序 ----
+const SESSIONS = [];
+for (const u of UNITS) {
+  [...u.L].forEach((L,i)=>SESSIONS.push({type:'letter',L,unit:u.n,p:[u.start+2*i,u.start+2*i+1]}));
+  SESSIONS.push({type:'unit',unit:u.n,L:u.L,rev:u.rev,story:u.story});
+  const r = REVIEWS[u.n];
+  if (r) SESSIONS.push({type:'review',n:r.n,L:UNITS[u.n-2].L+u.L,song:r.song,game:r.game});
+}
+const sessName = s => s.type==='letter' ? `学字母 ${s.L}${s.L.toLowerCase()}`
+  : s.type==='unit' ? `第${s.unit}单元 复习+故事` : `大复习 ${s.n}`;
+
+// ---- 状态（存在本机） ----
+const KEY='phonics1';
+let st; try{ st=JSON.parse(localStorage.getItem(KEY)) }catch(e){}
+st = st || {idx:0,stars:0,ticks:[]};
+const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(st)) }catch(e){} };
+const learned = () => new Set(SESSIONS.slice(0,st.idx).filter(s=>s.type==='letter').map(s=>s.L));
+
+// ---- 朗读单词（iPad 自带英文语音） ----
+let voice=null;
+const pickVoice=()=>{ const vs=speechSynthesis.getVoices().filter(v=>/^en[-_]US/i.test(v.lang));
+  voice = vs.find(v=>/Samantha/.test(v.name)) || vs[0] || null; };
+if ('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
+function say(w){ if(!('speechSynthesis' in window))return; speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(w); u.lang='en-US'; u.rate=.8; if(voice)u.voice=voice; speechSynthesis.speak(u); }
+
+// ---- 渲染 ----
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function card(L){
+  return `<div class="lc"><div class="em">${EMOJI[L]}</div><div class="big">${L}${L.toLowerCase()}</div>
+   <div class="words">${WORDS_LIST(L).map(w=>`<span class="w" data-say="${esc(w)}">${esc(w)}</span>`).join('')}</div></div>`;
+}
+const cards = Ls => `<div class="cards">${[...Ls].map(card).join('')}</div>`;
+const link = (url,txt) => `<a class="go" href="${url}" target="_blank" rel="noopener">${txt}</a>`;
+
+function steps(s){
+  const prev = SESSIONS[st.idx-1];
+  if (s.type==='letter') {
+    const out=[];
+    if (prev) out.push({ico:'☀️',name:'热身：读一读上次学的',body:cards(prev.L)+'<div class="note">点单词可以听发音</div>'});
+    out.push({ico:'📺',name:'看 Ivy 老师讲这个音',
+      hint: `从 ${fmtT(IVY_T[s.L])} 看到 ${fmtT(ivyEnd(s.L))}`,
+      body:link(ivyUrl(s.L),'▶ 打开视频')});
+    out.push({ico:'📗',name:`做书：第 ${s.p[0]}–${s.p[1]} 页`,hint:'看图、跟读、描字母，写不了的可以只指一指',body:cards(s.L)});
+    out.push({ico:'🎵',name:`唱 ${s.L} 的儿歌`,hint:'Hello Carrie，2分钟',body:link(songUrl(s.L),'▶ 打开儿歌')});
+    return out;
+  }
+  if (s.type==='unit') return [
+    {ico:'🔤',name:'把这个单元的字母读一遍',body:cards(s.L)},
+    {ico:'📗',name:`做书：第 ${s.rev} 页`,hint:'找相同开头的音'},
+    {ico:'📖',name:`读故事：第 ${s.story} 页`,hint:'指着图一起讲'},
+    {ico:'🎵',name:'挑一首喜欢的儿歌再唱一遍',body:[...s.L].map(L=>link(songUrl(L),`▶ ${L}`)).join('')}];
+  return [
+    {ico:'🔤',name:'把这两个单元的字母读一遍',body:cards(s.L)},
+    {ico:'📺',name:'Ivy 老师的字母总复习',hint:`从 ${fmtT(IVY_RECAP)} 看到结尾`,body:link(`${IVY_BASE}&t=${IVY_RECAP}`,'▶ 打开视频')},
+    {ico:'🎤',name:`书上的歌：第 ${s.song}–${s.game-1} 页`},
+    {ico:'🎲',name:`书上的游戏：第 ${s.game} 页`}];
+}
+
+function renderToday(){
+  if (st.idx >= SESSIONS.length) {
+    $('#main').innerHTML = `<div class="party">🏆</div><div class="title" style="text-align:center">第1册全部学完啦！</div>
+      <div class="subt" style="text-align:center">书上第 88 页唱字母歌，第 103 页有奖状</div>`;
+    return;
+  }
+  const s = SESSIONS[st.idx], list = steps(s);
+  const allDone = list.every((_,i)=>st.ticks[i]);
+  $('#main').innerHTML = `<div class="title">第 ${st.idx+1} 课：${sessName(s)}</div>
+    <div class="subt">共 ${SESSIONS.length} 课，做完一步点右边的圆圈</div>
+    ${list.map((x,i)=>`<div class="step ${st.ticks[i]?'done':''}">
+      <div class="ico">${x.ico}</div>
+      <div class="body"><div class="name">${x.name}</div>${x.hint?`<div class="hint">${x.hint}</div>`:''}${x.body||''}</div>
+      <button class="chk" data-tick="${i}">${st.ticks[i]?'✓':''}</button></div>`).join('')}
+    <button class="finish" id="finish" ${allDone?'':'disabled'}>${allDone?'⭐ 完成今天！':'做完上面几步就能拿星星'}</button>`;
+}
+
+function renderMap(){
+  const got = learned();
+  $('#main').innerHTML = `<div class="subt">学过的字母会亮起来，点一下可以复习</div><div class="map">${
+    Object.keys(WORDS).map(L=>`<button class="tile ${got.has(L)?'lit':''}" data-letter="${L}"><span class="em">${EMOJI[L]}</span>${L}${L.toLowerCase()}</button>`).join('')}</div>`;
+}
+
+let tab='today';
+function render(){
+  $('#stars').textContent = `⭐ ${st.stars}`;
+  $('#tabToday').classList.toggle('on',tab==='today'); $('#tabMap').classList.toggle('on',tab==='map');
+  tab==='today' ? renderToday() : renderMap();
+}
+
+function sheet(html){ const d=document.createElement('div'); d.className='sheet';
+  d.innerHTML=`<div>${html}</div>`; d.onclick=e=>{ if(e.target===d) d.remove() }; document.body.appendChild(d); return d; }
+
+function parentPanel(){
+  const d = sheet(`<div class="title">家长设置</div><div class="subt">点一课，把进度改到那里（星星不变）</div>
+    <div class="plist">${SESSIONS.map((s,i)=>`<button data-jump="${i}" class="${i===st.idx?'cur':''}">${i+1}. ${sessName(s)}</button>`).join('')}
+    <button data-jump="${SESSIONS.length}" class="${st.idx>=SESSIONS.length?'cur':''}">全部学完</button></div>`);
+  d.addEventListener('click',e=>{ const b=e.target.closest('[data-jump]'); if(!b)return;
+    st.idx=+b.dataset.jump; st.ticks=[]; save(); d.remove(); tab='today'; render(); });
+}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-say],[data-tick],[data-letter],#finish,#tabToday,#tabMap'); if(!t)return;
+  if (t.dataset.say) return say(t.dataset.say);
+  if (t.dataset.tick!=null){ const i=+t.dataset.tick; st.ticks[i]=!st.ticks[i]; save(); return render(); }
+  if (t.dataset.letter) return sheet(`<div style="display:flex;justify-content:center">${card(t.dataset.letter)}</div>`);
+  if (t.id==='finish'){ st.idx++; st.stars++; st.ticks=[]; save(); render(); window.scrollTo(0,0); return; }
+  if (t.id==='tabToday'){ tab='today'; render(); }
+  if (t.id==='tabMap'){ tab='map'; render(); }
+});
+// 家长设置：长按齿轮 1.5 秒
+let pressT; const g=$('#gear');
+g.addEventListener('pointerdown',()=>{ pressT=setTimeout(parentPanel,1500) });
+['pointerup','pointerleave','pointercancel'].forEach(ev=>g.addEventListener(ev,()=>clearTimeout(pressT)));
+g.addEventListener('contextmenu',e=>e.preventDefault());
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
