@@ -46,6 +46,11 @@ a.go,button.go{display:inline-block;border:none;margin-top:8px;padding:10px 18px
 .tile .em{font-size:28px;filter:grayscale(1);opacity:.35}
 .tile.lit{background:var(--card);color:var(--ink);border:3px solid var(--accent)}
 .tile.lit .em{filter:none;opacity:1}
+.tile.gold{border-color:#f5b400;background:#fff3c4}
+.rb{display:flex;gap:6px;margin-top:6px}
+.rb button{flex:1;font-size:16px;padding:8px 4px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink)}
+.rb button.on{border-color:var(--ok);background:#effaf2;font-weight:700}
+.rb button.on[data-r=again]{border-color:var(--accent);background:#fff0e3}
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px}
 .sheet>div{background:var(--card);border-radius:24px;padding:20px;max-width:560px;width:100%;max-height:85vh;overflow:auto}
 .plist button{display:block;width:100%;text-align:left;padding:10px 12px;margin:4px 0;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:17px;color:var(--ink)}
@@ -116,6 +121,41 @@ st = st || {idx:0,stars:0,ticks:[]};
 const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(st)) }catch(e){} };
 const learned = () => new Set(SESSIONS.slice(0,st.idx).filter(s=>s.type==='letter').map(s=>s.L));
 
+// ---- 记忆曲线复习：学完后第 1、2、4、7、15、30 天各复习一次 ----
+// cards[L] = {box: 已连续答对几次, due: 下次复习日期}；box 到 6 = 掌握
+const GAPS = [1,1,2,3,8,15];   // 相邻两次复习的间隔天数，累计即 1、2、4、7、15、30
+const REVIEW_MAX = 5;          // 中班孩子一次最多复习 5 个
+const dstr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = () => dstr(new Date());
+const addDays = n => { const d=new Date(); d.setDate(d.getDate()+n); return dstr(d); };
+const mastered = L => st.cards[L] && st.cards[L].box >= GAPS.length;
+// 学过的字母都要有复习记录（兼容旧数据、家长改进度）
+function syncCards(){
+  st.cards = st.cards || {}; const got = learned();
+  for (const L of got) if (!st.cards[L]) st.cards[L] = {box:0,due:today()};
+  for (const L in st.cards) if (!got.has(L)) delete st.cards[L];
+}
+// 当天的复习单：一天只生成一次，优先级 = 级别低的（刚退回的）在前，再按到期早晚
+function todayRev(){
+  const d = today();
+  if (!st.rev || st.rev.day !== d) {
+    const list = Object.entries(st.cards).filter(([,c])=>c.due && c.due<=d)
+      .sort((a,b)=>a[1].box-b[1].box || a[1].due.localeCompare(b[1].due))
+      .slice(0,REVIEW_MAX).map(([L])=>L);
+    st.rev = {day:d,list,res:{},before:{}}; save();
+  }
+  return st.rev;
+}
+// r = 'ok' 升一级 / 'again' 退回第一级；当天点错了可以改，从当天复习前的状态重新算
+function grade(L,r){
+  const v = todayRev(); if (v.res[L]===r) return;
+  if (v.before[L]) st.cards[L] = {...v.before[L]}; else v.before[L] = {...st.cards[L]};
+  const c = st.cards[L];
+  if (r==='ok') { c.box++; c.due = c.box>=GAPS.length ? null : addDays(GAPS[c.box]); }
+  else { c.box = 0; c.due = addDays(GAPS[0]); }
+  v.res[L] = r; save(); render();
+}
+
 // ---- 朗读单词（iPad 自带英文语音） ----
 let voice=null;
 const pickVoice=()=>{ const vs=speechSynthesis.getVoices().filter(v=>/^en[-_]US/i.test(v.lang));
@@ -135,11 +175,22 @@ const cards = Ls => `<div class="cards">${[...Ls].map(card).join('')}</div>`;
 const link = (url,txt) => `<a class="go" href="${url}" target="_blank" rel="noopener">${txt}</a>`;
 const ivyPlay = t => `<button class="go" data-play="${t}">▶ 在这里播放</button>${link(`${IVY_BASE}&t=${t}`,'去 B 站看')}`;
 
+function reviewStep(){
+  const v = todayRev(); if (!v.list.length) return null;
+  return {ico:'🧠',name:`今日复习：${v.list.length} 个字母`,auto:true,done:v.list.every(L=>v.res[L]),
+    hint:'孩子读出字母的音和单词，大人判断会不会。点单词可以听发音',
+    body:`<div class="cards">${v.list.map(L=>`<div>${card(L)}<div class="rb">
+      <button data-rev="${L}" data-r="ok" class="${v.res[L]==='ok'?'on':''}">✅ 会了</button>
+      <button data-rev="${L}" data-r="again" class="${v.res[L]==='again'?'on':''}">🔁 再练练</button></div></div>`).join('')}</div>`};
+}
+
 function steps(s){
-  const prev = SESSIONS[st.idx-1];
+  const rs = reviewStep(), list = lessonSteps(s);
+  return rs ? [rs,...list] : list;
+}
+function lessonSteps(s){
   if (s.type==='letter') {
     const out=[];
-    if (prev) out.push({ico:'☀️',name:'热身：读一读上次学的',body:cards(prev.L)+'<div class="note">点单词可以听发音</div>'});
     out.push({ico:'📺',name:'看 Ivy 老师讲这个音',
       hint: `从 ${fmtT(IVY_T[s.L])} 看到 ${fmtT(ivyEnd(s.L))}`,
       body:ivyPlay(IVY_T[s.L])});
@@ -160,30 +211,34 @@ function steps(s){
 }
 
 function renderToday(){
+  const isDone = (x,i) => x.auto ? x.done : st.ticks[i];
+  const stepHtml = (x,i) => `<div class="step ${isDone(x,i)?'done':''}">
+      <div class="ico">${x.ico}</div>
+      <div class="body"><div class="name">${x.name}</div>${x.hint?`<div class="hint">${x.hint}</div>`:''}${x.body||''}</div>
+      <button class="chk" ${x.auto?'':`data-tick="${i}"`}>${isDone(x,i)?'✓':''}</button></div>`;
   if (st.idx >= SESSIONS.length) {
+    const rs = reviewStep();
     $('#main').innerHTML = `<div class="party">🏆</div><div class="title" style="text-align:center">第1册全部学完啦！</div>
-      <div class="subt" style="text-align:center">书上第 88 页唱字母歌，第 103 页有奖状</div>`;
+      <div class="subt" style="text-align:center">书上第 88 页唱字母歌，第 103 页有奖状</div>${rs?stepHtml(rs,0):''}`;
     return;
   }
   const s = SESSIONS[st.idx], list = steps(s);
-  const allDone = list.every((_,i)=>st.ticks[i]);
+  const allDone = list.every(isDone);
   $('#main').innerHTML = `<div class="title">第 ${st.idx+1} 课：${sessName(s)}</div>
     <div class="subt">共 ${SESSIONS.length} 课，做完一步点右边的圆圈</div>
-    ${list.map((x,i)=>`<div class="step ${st.ticks[i]?'done':''}">
-      <div class="ico">${x.ico}</div>
-      <div class="body"><div class="name">${x.name}</div>${x.hint?`<div class="hint">${x.hint}</div>`:''}${x.body||''}</div>
-      <button class="chk" data-tick="${i}">${st.ticks[i]?'✓':''}</button></div>`).join('')}
+    ${list.map(stepHtml).join('')}
     <button class="finish" id="finish" ${allDone?'':'disabled'}>${allDone?'⭐ 完成今天！':'做完上面几步就能拿星星'}</button>`;
 }
 
 function renderMap(){
   const got = learned();
-  $('#main').innerHTML = `<div class="subt">学过的字母会亮起来，点一下可以复习</div><div class="map">${
-    Object.keys(WORDS).map(L=>`<button class="tile ${got.has(L)?'lit':''}" data-letter="${L}"><span class="em">${EMOJI[L]}</span>${L}${L.toLowerCase()}</button>`).join('')}</div>`;
+  $('#main').innerHTML = `<div class="subt">学过的字母会亮起来，坚持复习一个月就变成金色，点一下可以复习</div><div class="map">${
+    Object.keys(WORDS).map(L=>`<button class="tile ${got.has(L)?'lit':''} ${mastered(L)?'gold':''}" data-letter="${L}"><span class="em">${EMOJI[L]}</span>${L}${L.toLowerCase()}</button>`).join('')}</div>`;
 }
 
 let tab='today';
 function render(){
+  syncCards();
   $('#stars').textContent = `⭐ ${st.stars}`;
   $('#tabToday').classList.toggle('on',tab==='today'); $('#tabMap').classList.toggle('on',tab==='map');
   tab==='today' ? renderToday() : renderMap();
@@ -201,13 +256,16 @@ function parentPanel(){
 }
 
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-say],[data-play],[data-tick],[data-letter],#finish,#tabToday,#tabMap'); if(!t)return;
+  const t=e.target.closest('[data-say],[data-play],[data-rev],[data-tick],[data-letter],#finish,#tabToday,#tabMap'); if(!t)return;
   if (t.dataset.say) return say(t.dataset.say);
+  if (t.dataset.rev) return grade(t.dataset.rev, t.dataset.r);
   if (t.dataset.play){ document.querySelectorAll('.vid').forEach(f=>f.remove());
     t.closest('.body').insertAdjacentHTML('beforeend',`<iframe class="vid" src="${ivyEmbed(t.dataset.play)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`); return; }
   if (t.dataset.tick!=null){ const i=+t.dataset.tick; st.ticks[i]=!st.ticks[i]; save(); return render(); }
   if (t.dataset.letter) return sheet(`<div style="display:flex;justify-content:center">${card(t.dataset.letter)}</div>`);
-  if (t.id==='finish'){ st.idx++; st.stars++; st.ticks=[]; save(); render(); window.scrollTo(0,0); return; }
+  if (t.id==='finish'){ const s=SESSIONS[st.idx];
+    if (s.type==='letter') st.cards[s.L] = {box:0,due:addDays(GAPS[0])};  // 新学的字母明天第一次复习
+    st.idx++; st.stars++; st.ticks=[]; save(); render(); window.scrollTo(0,0); return; }
   if (t.id==='tabToday'){ tab='today'; render(); }
   if (t.id==='tabMap'){ tab='map'; render(); }
 });
